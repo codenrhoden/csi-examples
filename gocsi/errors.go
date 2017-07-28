@@ -28,6 +28,9 @@ var ErrNilPublishVolumeInfo = errors.New("publishVolumeInfo is nil")
 // a nil NodeID.
 var ErrNilNodeID = errors.New("nodeID is nil")
 
+// ErrNilSupportedVersions occurs when a gRPC call returns nil SupportedVersions
+var ErrNilSupportedVersions = errors.New("supportedVersions is nil")
+
 // ErrVersionRequired occurs when an RPC call is made with a nil
 // version argument.
 var ErrVersionRequired = errors.New("version is required")

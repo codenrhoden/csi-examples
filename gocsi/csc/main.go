@@ -170,6 +170,15 @@ const mapSzOfSzFormat = `{{range $k, $v := .}}` +
 const volumeInfoFormat = `{{with .GetId}}{{range $k, $v := .GetValues}}` +
 	`{{printf "%s=%s\t" $k $v}}{{end}}{{end}}{{"\n"}}`
 
+// versionFormat is the default Go template format for emitting a *csi.Version
+const versionFormat = `{{.GetMajor}}.{{.GetMinor}}.{{.GetPatch}}`
+
+// pluginInfoFormat is the default Go template format for
+// emitting a *csi.GetPluginInfoResponse_Result
+const pluginInfoFormat = `{{.Name}}{{print "\t"}}{{.VendorVersion}}{{print "\t"}}` +
+	`{{with .GetManifest}}{{range $k, $v := .}}` +
+	`{{printf "%s=%s\t" $k $v}}{{end}}{{end}}{{"\n"}}`
+
 ///////////////////////////////////////////////////////////////////////////////
 //                                Commands                                   //
 ///////////////////////////////////////////////////////////////////////////////
@@ -243,14 +252,14 @@ var identityCmds = []*cmd{
 	&cmd{
 		Name:    "getsupportedversions",
 		Aliases: []string{"gets"},
-		Action:  nil,
-		Flags:   nil,
+		Action:  getSupportedVersions,
+		Flags:   flagsGetSupportedVersions,
 	},
 	&cmd{
 		Name:    "getplugininfo",
 		Aliases: []string{"getp"},
-		Action:  nil,
-		Flags:   nil,
+		Action:  getPluginInfo,
+		Flags:   flagsGetPluginInfo,
 	},
 }
 
@@ -1174,5 +1183,95 @@ func (s *mapOfStringArg) Set(val string) error {
 			s.vals[vp[0]] = vp[1]
 		}
 	}
+	return nil
+}
+
+func flagsGetSupportedVersions(
+	ctx context.Context, rpc string) *flag.FlagSet {
+
+	fs := flag.NewFlagSet(rpc, flag.ExitOnError)
+	flagsGlobal(fs, versionFormat, "*csi.Version")
+
+	fs.Usage = func() {
+		fmt.Fprintf(
+			os.Stderr,
+			"usage: %s %s [ARGS...]\n",
+			appName, rpc)
+		fs.PrintDefaults()
+	}
+	return fs
+}
+
+func getSupportedVersions(
+	ctx context.Context,
+	fs *flag.FlagSet,
+	cc *grpc.ClientConn) error {
+
+	// initialize the csi client
+	client := csi.NewIdentityClient(cc)
+
+	// execute the rpc
+	versions, err := gocsi.GetSupportedVersions(ctx, client)
+	if err != nil {
+		return err
+	}
+
+	// create a template for emitting the output
+	tpl := template.New("template")
+	if tpl, err = tpl.Parse(args.format); err != nil {
+		return err
+	}
+	// emit the result
+	for _, v := range versions {
+		if err = tpl.Execute(
+			os.Stdout, v); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func flagsGetPluginInfo(
+	ctx context.Context, rpc string) *flag.FlagSet {
+
+	fs := flag.NewFlagSet(rpc, flag.ExitOnError)
+	flagsGlobal(fs, pluginInfoFormat, "*csi.GetPluginInfoResponse_Result")
+
+	fs.Usage = func() {
+		fmt.Fprintf(
+			os.Stderr,
+			"usage: %s %s [ARGS...]\n",
+			appName, rpc)
+		fs.PrintDefaults()
+	}
+	return fs
+}
+
+func getPluginInfo(
+	ctx context.Context,
+	fs *flag.FlagSet,
+	cc *grpc.ClientConn) error {
+
+	// initialize the csi client
+	client := csi.NewIdentityClient(cc)
+
+	// execute the rpc
+	info, err := gocsi.GetPluginInfo(ctx, client, args.version)
+	if err != nil {
+		return err
+	}
+
+	// create a template for emitting the output
+	tpl := template.New("template")
+	if tpl, err = tpl.Parse(args.format); err != nil {
+		return err
+	}
+	// emit the result
+	if err = tpl.Execute(
+		os.Stdout, info); err != nil {
+		return err
+	}
+
 	return nil
 }
