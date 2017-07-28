@@ -179,6 +179,8 @@ const pluginInfoFormat = `{{.Name}}{{print "\t"}}{{.VendorVersion}}{{print "\t"}
 	`{{with .GetManifest}}{{range $k, $v := .}}` +
 	`{{printf "%s=%s\t" $k $v}}{{end}}{{end}}{{"\n"}}`
 
+const ctrlCapFormat = `{{.GetType}}{{"\n"}}`
+
 ///////////////////////////////////////////////////////////////////////////////
 //                                Commands                                   //
 ///////////////////////////////////////////////////////////////////////////////
@@ -243,8 +245,8 @@ var controllerCmds = []*cmd{
 	&cmd{
 		Name:    "controllergetcapabilities",
 		Aliases: []string{"cget"},
-		Action:  nil,
-		Flags:   nil,
+		Action:  controllerGetCapabilities,
+		Flags:   flagsControllerGetCapabilities,
 	},
 }
 
@@ -1271,6 +1273,52 @@ func getPluginInfo(
 	if err = tpl.Execute(
 		os.Stdout, info); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func flagsControllerGetCapabilities(
+	ctx context.Context, rpc string) *flag.FlagSet {
+
+	fs := flag.NewFlagSet(rpc, flag.ExitOnError)
+	flagsGlobal(fs, ctrlCapFormat, "*csi.ControllerGetCapabilitiesResponse_Result")
+
+	fs.Usage = func() {
+		fmt.Fprintf(
+			os.Stderr,
+			"usage: %s %s [ARGS...]\n",
+			appName, rpc)
+		fs.PrintDefaults()
+	}
+	return fs
+}
+
+func controllerGetCapabilities(
+	ctx context.Context,
+	fs *flag.FlagSet,
+	cc *grpc.ClientConn) error {
+
+	// initialize the csi client
+	client := csi.NewControllerClient(cc)
+
+	// execute the rpc
+	caps, err := gocsi.ControllerGetCapabilities(ctx, client, args.version)
+	if err != nil {
+		return err
+	}
+
+	// create a template for emitting the output
+	tpl := template.New("template")
+	if tpl, err = tpl.Parse(args.format); err != nil {
+		return err
+	}
+	// emit the results
+	for _, c := range caps {
+		if err = tpl.Execute(
+			os.Stdout, c); err != nil {
+			return err
+		}
 	}
 
 	return nil
